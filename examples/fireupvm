@@ -1,0 +1,33 @@
+#!/bin/bash
+#
+# Start an Azure Ubuntu VM with nginx running
+
+
+RESGROUP=ttgroup-$(uuidgen)
+VMNAME=ttvm-$(uuidgen)
+
+echo Creating resource group $RESGROUP
+echo Creating VM $VMNAME
+
+export PATH="$PATH:~/.local/bin/"
+
+pip install --user azure-cli
+
+[ -e .azure/accessTokens.json ] || az login
+
+az group create --name $RESGROUP --location eastus
+vmjson=$(az vm create --resource-group $RESGROUP --name $VMNAME --image Canonical:UbuntuServer:18.04-LTS:latest --generate-ssh-keys --verbose)
+
+echo "$vmjson"
+
+serverip=$(echo "$vmjson"|jq -r .publicIpAddress)
+ssh -oStrictHostKeyChecking=no $serverip /bin/true
+
+ssh $serverip sudo apt update
+ssh $serverip sudo apt -y upgrade
+ssh $serverip sudo apt -y install certbot nginx python3-certbot-nginx
+
+az vm open-port --resource-group $RESGROUP --name $VMNAME --port 80 --priority 901
+az vm open-port --resource-group $RESGROUP --name $VMNAME --port 443 --priority 902
+
+echo Your new Ubuntu server runs at $serverip.
