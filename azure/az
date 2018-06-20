@@ -1,0 +1,3 @@
+#!/bin/sh
+
+docker run -it --rm --user app -v $(pwd):/app:rw -v $(pwd)/.azure:/.azure:rw -w /app --pid host azure-cli /usr/local/bin/az $* 
