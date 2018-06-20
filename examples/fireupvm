@@ -2,6 +2,11 @@
 #
 # Start an Azure Ubuntu VM with nginx running
 
+# replace with your own values:
+HOSTNAME=azh.example.com
+CNAME=azhsomenamepleasechange
+# you need to create a DNS cname from $HOSTNAME pointing to
+# $CNAME.eastus.cloudapp.azure.com
 
 RESGROUP=ttgroup-$(uuidgen)
 VMNAME=ttvm-$(uuidgen)
@@ -16,18 +21,21 @@ pip install --user azure-cli
 [ -e .azure/accessTokens.json ] || az login
 
 az group create --name $RESGROUP --location eastus
-vmjson=$(az vm create --resource-group $RESGROUP --name $VMNAME --image Canonical:UbuntuServer:18.04-LTS:latest --generate-ssh-keys --verbose)
+vmjson=$(az vm create --resource-group $RESGROUP --name $VMNAME --image Canonical:UbuntuServer:18.04-LTS:latest --public-ip-address-dns-name $CNAME --generate-ssh-keys --verbose)
 
 echo "$vmjson"
 
 serverip=$(echo "$vmjson"|jq -r .publicIpAddress)
 ssh -oStrictHostKeyChecking=no $serverip /bin/true
 
+az vm open-port --resource-group $RESGROUP --name $VMNAME --port 80 --priority 901
+az vm open-port --resource-group $RESGROUP --name $VMNAME --port 443 --priority 902
+
 ssh $serverip sudo apt update
 ssh $serverip sudo apt -y upgrade
 ssh $serverip sudo apt -y install certbot nginx python3-certbot-nginx
 
-az vm open-port --resource-group $RESGROUP --name $VMNAME --port 80 --priority 901
-az vm open-port --resource-group $RESGROUP --name $VMNAME --port 443 --priority 902
+ssh $serverip sudo sed -e "s:server_name _:server_name $HOSTNAME:g" -i /etc/nginx/sites-available/default
+ssh $serverip sudo certbot -n --nginx -d $HOSTNAME --register-unsafely-without-email --agree-tos --redirect
 
 echo Your new Ubuntu server runs at $serverip.
